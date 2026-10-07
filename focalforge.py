@@ -79,6 +79,7 @@ defaults):
     yaw       — degrees, around Y (up) axis; positive = turn left
 """
 
+import re
 import cv2
 import numpy as np
 import math
@@ -221,10 +222,15 @@ class CalibrationVisualizer:
         if config_path:
             self.load_config(config_path)
 
+        is_videofile: bool = False
+
         # Try to initialize the video device or stream
-        if sys.platform == 'win32':
+        if sys.platform == 'win32' and re.match(r'^\d+$', camera_index):
             self.cap = cv2.VideoCapture(int(camera_index), cv2.CAP_DSHOW)  # Windows requires DirectShow support
+        elif camera_index.startswith("/dev"):
+            self.cap = cv2.VideoCapture(camera_index)
         else:
+            is_videofile = True
             self.cap = cv2.VideoCapture(camera_index)
 
         if not self.cap.isOpened():
@@ -232,7 +238,7 @@ class CalibrationVisualizer:
 
         original_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         original_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        if config_path:
+        if config_path and not is_videofile:
             if not self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width) or not self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height):
                 raise RuntimeError(f"ERROR: Failed to configure video stream to use resolution {self.width}x{self.height} (was {original_width}x{original_height}). Verify the calibration file if used.")
         else:
@@ -710,7 +716,7 @@ class CalibrationVisualizer:
             ret, frame = self.cap.read()
             if not ret:
                 print("WARNING: camera frame read failed — retrying ...", file=sys.stderr)
-                cv2.waitKey(50)
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 continue
 
             self.draw_scene(frame)
